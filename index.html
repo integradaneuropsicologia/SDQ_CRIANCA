@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>SDQ_CRIANCA – Questionário de Capacidades e Dificuldades</title>
+<title>SDQ – Questionário de Capacidades e Dificuldades (Criança)</title>
 <style>
   :root{--bg:#0f172a;--card:#111827;--line:#1f2937;--text:#e5e7eb;--muted:#94a3b8;--pri:#4f46e5;--ok:#22c55e;--err:#ef4444}
   *{box-sizing:border-box}
@@ -36,7 +36,7 @@
 <body>
 <div class="wrap">
   <div class="card">
-    <h1>SDQ_CRIANCA – Questionário de Capacidades e Dificuldades</h1>
+    <h1>SDQ – Questionário de Capacidades e Dificuldades (Criança)</h1>
     <p class="muted">Respostas: <b>Falso</b> • <b>Mais ou menos verdadeiro</b> • <b>Verdadeiro.</b></p>
 
     <div id="pacInfo" class="grid-info" style="display:none;"></div>
@@ -258,8 +258,53 @@ $("#form").addEventListener("submit", async (e)=>{
       setTimeout(goPortalWithToken, 1000); return;
     }
 
-    // soma total
+        // soma total (bruta, sem inversão, só pra registro)
     const total = Object.values(answers).reduce((s,v)=>s+v,0);
+
+    // ======== CÁLCULO DAS ESCALAS SDQ ========
+    const score = (i, invert = false) => {
+      const v = answers[i];
+      if (v == null) return 0;
+      // escala 0–2 → invertido vira 2 - v
+      return invert ? (2 - v) : v;
+    };
+
+    // Sintomas emocionais: 1, 2, 3, 4, 5
+    const sintomasEmocionais = [1,2,3,4,5]
+      .reduce((s,i) => s + score(i), 0);
+
+    // Problemas de comportamento: 6, 7, 8, 9, 10 (7 invertido)
+    const problemasComportamento = [6,7,8,9,10]
+      .reduce((s,i) => s + score(i, i === 7), 0);
+
+    // Sintomas de hiperatividade: 11, 12, 13, 14, 15 (14 e 15 invertidos)
+    const sintomasHiperatividade = [11,12,13,14,15]
+      .reduce((s,i) => s + score(i, i === 14 || i === 15), 0);
+
+    // Problemas com colegas: 16, 17, 18, 19, 20 (17 e 18 invertidos)
+    const problemasColegas = [16,17,18,19,20]
+      .reduce((s,i) => s + score(i, i === 17 || i === 18), 0);
+
+    // Comportamento pró-social: 21, 22, 23, 24, 25
+    const comportamentoProsocial = [21,22,23,24,25]
+      .reduce((s,i) => s + score(i), 0);
+
+    // Total de dificuldades = somatório das 4 primeiras escalas (1–20)
+    const totalDificuldades =
+      sintomasEmocionais +
+      problemasComportamento +
+      sintomasHiperatividade +
+      problemasColegas;
+
+    // Objeto que vai para a coluna "categoria"
+    const categorias = {
+      total_dificuldades: totalDificuldades,
+      sintomas_emocionais: sintomasEmocionais,
+      problemas_comportamento: problemasComportamento,
+      sintomas_hiperatividade: sintomasHiperatividade,
+      problemas_colegas: problemasColegas,
+      comportamento_prosocial: comportamentoProsocial
+    };
 
     const row = {
       result_id:`${patient.cpf}_${CODE}_${Date.now()}`,
@@ -268,11 +313,13 @@ $("#form").addEventListener("submit", async (e)=>{
       code:CODE,
       source:"paciente",
       submitted_at:new Date().toISOString(),
-      total,                // também em 'total'
-      categoria: String(total), // <-- soma total gravada na coluna categoria (como pediu)
-      metrics: JSON.stringify({ answers })
+      total,
+      categoria: JSON.stringify(categorias),
+      metrics: ""
     };
-    await sheetCreate(SHEETS.SCORES,row);
+
+    await sheetCreate(SHEETS.SCORES, row);
+
 
     await sheetPatchBy(SHEETS.PATIENTS,"cpf",patient.cpf,{ [`${CODE}_FEITO`]:"sim", [`${CODE}_FEITO_AT`]: new Date().toISOString() });
 
